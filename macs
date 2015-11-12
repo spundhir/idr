@@ -1,0 +1,20 @@
+## meaning of pileup value from macs2 (https://groups.google.com/forum/#!topic/macs-announcement/c__KCotHsok)
+
+Dear Fred,
+
+Now, what does that pileup value really mean? 
+
+ChIP pileup values are calculated in this way: 1) Sequencing reads are extended into N bps fragments according to fragment size prediction step; 2) For each position, MACS2 computes how many fragments can be found; 3) Only if ChIP has more reads than control, these values will be multiplied by control_depth/ChIP_depth (default behavior). The 'pileup' value you saw in xls file is the value at peak summit, which means how many fragments you can find covering the peak summit. 
+
+Can I use the pileup value from experiment 1 to compare results with experiment 2?
+
+You can't directly use them if experiments have different sequencing depths. You can use '--SPMR' option for 'callpeak' command to get normalized pileup values in million reads. Then these values can be compared.
+ 
+ Does it directly correlate with the number of tags on each peak summit?
+
+ Yes. 
+
+ In order to filter out weak peaks using pileup value, you can draw a distribution of pileup value at peak summit for all peaks, then select a reasonable cutoff. Or you can consider both p or q-values and fold-enrichment values since these measurements take control sample in consideration. 
+
+ Best,
+ Tao

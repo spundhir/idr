@@ -1,0 +1,100 @@
+#PBS -l nodes=1:ppn=4
+
+## initialize variables with default values
+MACS_P_VALUE="1e-3"
+PROGDIR="/home/pundhir/software/idrCode"
+
+#### usage ####
+usage() {
+	echo Program: "diffPeak (identify differential peaks using macs2)"
+	echo Author: BRIC, University of Copenhagen, Denmark
+	echo Version: 1.0
+	echo Contact: pundhir@binf.ku.dk
+    echo "Usage: diffPeak -i <file> -j <file> -c <file> -o <dir> [OPTIONS]"
+	echo "Options:"
+    echo " -i <file>   [mapped tag (sample) file from first condition in BAM format]"
+    echo " -j <file>   [mapped tag (sample) file from second condition in BAM format]"
+    echo " -c <file>   [mapped tag (control) file in BAM format]"
+    echo " -o <dir>    [output directory (should be absolute path)]"
+    echo " -p <dir>    [path to dependent R scripts (default: /home/pundhir/software/idrCode)]"
+	echo " -h          [help]"
+	echo
+	exit 0
+}
+
+#### parse options ####
+while getopts i:j:c:o:p:h ARG; do
+	case "$ARG" in
+        i) CHIP_INPUT_COND1=$OPTARG;;
+        j) CHIP_INPUT_COND2=$OPTARG;;
+        c) CONTROL_INPUT=$OPTARG;;
+        o) OUTDIR=$OPTARG;;
+        p) PROGDIR=$OPTARG;;
+		h) HELP=1;;
+	esac
+done
+
+## usage, if necessary file and directories and not given/exist
+if [ ! "$CHIP_INPUT_COND1" -o !"$CHIP_INPUT_COND2" -o ! "$CONTROL_INPUT" -o ! "$OUTDIR" -o "$HELP" ]; then
+    usage
+fi
+
+###############################################
+## determine id of the input ChIP samples from first condition
+CHIP_ID_COND1=`echo $CHIP_INPUT_COND1 | sed 's/^.*\///g' | sed 's/Rep.*//g'`
+
+## determine id of the input ChIP samples from second condition
+CHIP_ID_COND2=`echo $CHIP_INPUT_COND1 | sed 's/^.*\///g' | sed 's/Rep.*//g'`
+
+## determine directory of the input ChIP/control sample files
+INDIR=`echo $TMP[0] | perl -ane 'if($_=~/\//) { $_=~s/\/[^\/]+$//g; print $_; } else { print "."; }'`
+
+echo "Total ChIP samples: $CHIP_COUNT ($CHIP_ID)"
+
+## determine number of input control samples
+IFS=","
+TMP=($CONTROL_INPUT)
+CONTROL_COUNT=${#TMP[@]}
+IFS=" "
+
+## determine common id of the input control samples
+CONTROL_ID=`echo $TMP[0] | sed 's/^.*\///g' | sed 's/Rep.*//g'`
+
+echo "Total control samples: $CONTROL_COUNT ($CONTROL_ID)"
+
+##########################################################################
+############ DETERMINE SHIFTSIZE FOR EACH CHIP SAMPLE
+##########################################################################
+
+## determine fragment length for all ChIP samples using macs2
+echo -n "Determine fragment length of each ChIP sample.. "
+FRAGMENT_LENGTH=(0)
+for (( i=1; i<=$CHIP_COUNT; i++ )); do
+    if [ ! -f "$OUTDIR/logs/$CHIP_ID"Rep"$i.predictd" ]; then
+        macs2 predictd -i $INDIR/$CHIP_ID"Rep"$i.bam --outdir $OUTDIR/logs 2> $OUTDIR/logs/$CHIP_ID"Rep"$i.predictd
+    fi
+    FRAGMENT_LENGTH[$i]=`grep "predicted fragment length" $OUTDIR/logs/$CHIP_ID"Rep"$i.predictd | perl -ane 'print $F[scalar(@F)-2];'`
+    TOTAL+=$FRAGMENT_LENGTH[$i]
+done
+EXTSIZE=`expr $TOTAL / $CHIP_COUNT`
+echo "done"
+
+## call peaks to determine effective sequencing depth
+echo -n "Call peaks to determine effective sequencing depth.. "
+EFFECTIVE_DEPTH=(0)
+for (( i=1; i<=$CHIP_COUNT; i++ )); do
+    if [ ! -f "$OUDIR/macs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0" ]; then
+        macs2 call peak -B -t $INDIR/$CHIP_ID"Rep"$i.bam -c $INDIR/$CONTROL_ID"Rep1"$i.bam -n $OUDIR/macs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0" --nomodel --extsize $EXTSIZE -g mm 2>$OUTDIR/logs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0.log"
+    fi
+    EFFECTIVE_DEPTH[$i]=`egrep "tags after filtering in treatment|tags after filtering in control" $OUTDIR/macs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0_peaks.xls" | perl -an -F'/\:/' -e 'if(!defined($min)){$min=$F[1];} elsif($F[1]<$min){$min=$F[1];} END {print "$min\n";}'`
+done
+echo "done"
+
+## call differential peaks
+echo -n "Call differential peaks.. "
+macs2 bdgdiff --t1 $OUDIR/macs/$CHIP_ID"Rep1_Vs_"$CONTROL_ID"Rep0_treat_pileup.bdg" --c1 $OUDIR/macs/$CHIP_ID"Rep1_Vs_"$CONTROL_ID"Rep0_control_lambda.bdg" --t2 $OUDIR/macs/$CHIP_ID"Rep2_Vs_"$CONTROL_ID"Rep0_treat_pileup.bdg" --c2 $OUDIR/macs/$CHIP_ID"Rep2_Vs_"$CONTROL_ID"Rep0_control_lambda.bdg" --d1 $EFFECTIVE_DEPTH[0] --d2 $EFFECTIVE_DEPTH[1] -g 60 -l 120 -o $OUTDIR/diffPeak/diff_$CHIP_ID"Rep1_Vs_Rep2"
+echo -n "done"
+
+exit
+
+

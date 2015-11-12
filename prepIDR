@@ -1,0 +1,216 @@
+#!/bin/bash
+#IDR calculations as given by https://sites.google.com/site/anshulkundaje/projects/idr
+
+# the script uses 4 x number_of_rep cores - this can be changed
+
+#input bam-files:
+files=( "h3k4me1_pregm_cebpa_wt_Rep1.bam" "h3k4me1_pregm_cebpa_wt_Rep2.bam" )
+
+#CONTROL FILE(S):
+control=( "control_Rep1.bam" )
+
+
+# outputdir
+outdir=IDR
+
+
+portstart=10187
+
+
+# put dir idrCode in same dir as bam-files
+
+
+####################################################################################################
+# do not edit under this line, unless you need to edit under this line - then edit under this line #
+####################################################################################################
+
+mkdir $outdir
+mkdir $outdir"/stats/"
+mkdir $outdir"/peaks/"
+mkdir $outdir"/peaks/reps/"
+mkdir $outdir"/peaks/pooled/"
+###################
+#helperfunction
+function wait_for_jobs_to_finish {
+for job in `jobs -p`
+do
+echo $job
+    wait $job
+done
+echo $1
+}
+###############
+# remove extentions
+f=`for file in ${files[@]}; do echo $file | sed s/.bam//; done`
+c=`for file in ${control[@]}; do echo $file | sed s/.bam//; done`
+
+# convert controls to tagAlign
+for i in ${c[@]}
+do
+	samtools view -b -F 1548 -q 30 $i".bam" | bamToBed -i stdin | awk 'BEGIN{FS="\t";OFS="\t"}{$4="N"; print $0}' | gzip -c > $outdir"/"$c.tagAlign.gz &
+done
+
+wait_for_jobs_to_finish "convert controls to tagAlign completed"
+
+exit
+
+# merge controls
+zcat `for file in ${c[@]}; do echo $outdir"/"$file".tagAlign.gz"; done` | gzip -c > $outdir"/"control.tagAlign.gz &
+
+
+# convert replicates to tagAlign format - thresholds as given by anshul
+for i in ${f[@]}
+do
+	samtools view -b -F 1548 -q 30 $i".bam" | bamToBed -i stdin | gawk 'BEGIN{FS="\t";OFS="\t"}{$4="N"; print $0}' | gzip -c > $outdir"/"$i".tagAlign.gz" & 
+done
+
+wait_for_jobs_to_finish "convert replicates to tagAlign format completed"
+
+# individual peak calling vs control (MARIE)
+count=0
+for i in ${f[@]}
+do
+	Rscript /home/pundhir/software/idrCode/phantompeakqualtools/run_spp.R -c=$outdir"/"$i".tagAlign.gz" -i=$outdir"/control.tagAlign.gz" -odir=$outdir"/peaks/reps" -npeak=300000 -savr -savp -rf -out=$outdir"/stats/phantomPeakStatsReps.tab" -x=-500:85 > $outdir"/"$i".log" &
+    ((count++ ))
+done
+
+wait_for_jobs_to_finish "peak calling vs control completed"
+
+
+# pool the lot
+zcat `for file in ${f[@]}; do echo $outdir"/"$file".tagAlign.gz"; done` | gzip -c > $outdir"/"pool.tagAlign.gz
+
+# peak call the pooled file
+Rscript /home/pundhir/software/idrCode/phantompeakqualtools/run_spp.R -c=$outdir"/"pool.tagAlign.gz -i=$outdir"/"control.tagAlign.gz -odir=$outdir"/peaks/pooled" -npeak=300000 -savr -savp -rf -x=-500:85 > $outdir"/"pool.log
+
+echo "peakcalling on pooled file"
+
+# make permutated pseudo-replicates and peak call
+#######################
+outputDir=$outdir"/peaks/selfPseudoReps" # output directory for pseudoreplicate files
+count=0
+mkdir $outputDir
+
+for i in ${f[@]} pool
+do
+	fileName=$outdir"/"$i".tagAlign.gz" # input tagAlign file name
+	outputStub=$i # prefix name for pseudoReplicate files
+
+	nlines=$( zcat $fileName | wc -l ) # Number of reads in the tagAlign file
+	nlines=$(( (nlines + 1) / 2 )) # half that number
+	zcat $fileName | shuf | split -d -l $nlines - $outputDir"/"$outputStub # This will shuffle the lines in the file and split it into two parts
+	gzip $outputDir"/"$outputStub"00"
+	gzip $outputDir"/"$outputStub"01"
+	mv $outputDir"/"$outputStub"00.gz" $outdir"/"$outputStub".pr1.tagAlign.gz"
+	mv $outputDir/$outputStub"01.gz" $outdir"/"$outputStub".pr2.tagAlign.gz"
+
+	#try to get 150-300K peaks!
+	
+    ((count++ )) # count for ports
+    Rscript /home/pundhir/software/idrCode/phantompeakqualtools/run_spp.R -c=$outdir"/"$outputStub".pr1.tagAlign.gz" -i=$outdir"/control.tagAlign.gz" -npeak=300000 -odir=$outputDir -savr -savp -rf -x=-500:85 > $outputDir"/"$outputStub".pr1.log" &
+    ((count++ ))
+    Rscript /home/pundhir/software/idrCode/phantompeakqualtools/run_spp.R -c=$outdir"/"$outputStub".pr2.tagAlign.gz" -i=$outdir"/control.tagAlign.gz" -npeak=300000 -odir=$outputDir -savr -savp -rf -x=-500:85 > $outputDir"/"$outputStub".pr2.log" &
+
+done
+
+wait_for_jobs_to_finish "make permutated pseudo-replicates and peak call - completed ..DONE WITH PREP!"
+
+
+# do analysis
+
+gunzip $outdir/peaks/reps/*".regionPeak.gz"
+
+mkdir $outdir"/consistency/"
+mkdir $outdir"/consistency/reps"
+mkdir $outdir"/consistency/reps/chipSampleAllReps"
+mkdir $outdir"/consistency/selfPseudoReps"
+mkdir $outdir"/consistency/selfPseudoReps/chipSampleAllReps"
+
+
+cd idrCode # have to move into idrCode
+
+# get pairwise and run IDR analysis from :
+f1=${f[@]}
+f2=(${f[@]})
+for i in ${f[@]}
+do
+	f2=(${f2[@]:1})
+	for k in ${f2[@]}
+	do
+	Rscript batch-consistency-analysis.r "../"$outdir"/peaks/reps/"$i".tagAlign_VS_control.tagAlign.regionPeak" "../"$outdir"/peaks/reps/"$k".tagAlign_VS_control.tagAlign.regionPeak" -1 "../"$outdir"/consistency/reps/"$i"_VS_"$k 0 F signal.value &
+	done
+done
+
+wait_for_jobs_to_finish "pairwise consistency analysis done"
+
+# make plots
+analysis_files_basename=$(ls "../"$outdir/consistency/reps/ | grep Rout.txt | sed s/-Rout.txt//)
+number_of_files=$(ls "../"$outdir/consistency/reps/ | grep Rout.txt | sed s/-Rout.txt// | wc -w) 
+
+Rscript batch-consistency-plot.r $number_of_files "../"$outdir"/consistency/reps/chipSampleAllReps" $(for i in $analysis_files_basename; do echo "../"$outdir"/consistency/reps/"$i; done)
+
+
+#run same for pseudoreps (pr1 and pr2 for each file)
+for i in ${f[@]} pool
+do
+	Rscript batch-consistency-analysis.r "../"$outdir"/peaks/selfPseudoReps/"$i".pr1.tagAlign_VS_control.tagAlign.regionPeak.gz" "../"$outdir"/peaks/selfPseudoReps/"$i".pr1.tagAlign_VS_control.tagAlign.regionPeak.gz" -1 "../"$outdir"/consistency/selfPseudoReps/"$i".pr1_VS_"$i".pr2" 0 F signal.value &
+done
+
+wait_for_jobs_to_finish "pseudoreps consistency analysis done"
+
+#plot pseudoreps
+analysis_files_basename=$(for i in ${f[@]}; do echo $i; done)
+number_of_files=$(for i in ${f[@]}; do echo $i; done | wc -w)
+Rscript batch-consistency-plot.r $number_of_files "../"$outdir"/consistency/selfPseudoReps/chipSampleAllReps" $(for i in $analysis_files_basename; do echo "../"$outdir"/consistency/selfPseudoReps/"$i".pr1_VS_"$i".pr2"; done)
+
+#plot pool:
+
+Rscript batch-consistency-plot.r 1 "../"$outdir"/consistency/selfPseudoReps/chipSampleAllReps" "../"$outdir"/consistency/selfPseudoReps/pool.pr1_VS_pool.pr2"
+
+
+cd ..
+
+
+echo "number of peaks in the original replicates that meets the threshold:"
+
+max_numPeaks_Rep=0
+#count number of peaks in reps
+for file in $(ls $outdir/consistency/reps/*-overlapped-peaks.txt)
+do
+	peaks=$( awk '$11 <= 0.01 {print $0}' $file | wc -l )
+	echo $file" has $peaks passing IDR threshold of 0.01"
+	if [ $peaks -gt $max_numPeaks_Rep ]
+	then
+	max_numPeaks_Rep=$peaks
+	fi
+done
+
+echo "Typically the self-consistency thresholds for all the original replicates should be reasonably similar (within a factor of 2).\n\n"
+
+echo "Number of peaks in the pseudoreplicates:"
+
+#count number of peaks in pseudoreps
+for file in $(ls $outdir/consistency/selfPseudoReps/*-overlapped-peaks.txt | grep -v "selfPseudoReps/pool.pr1_VS_pool.pr2-overlapped-peaks.txt")
+do
+	echo $file "has" $( awk '$11 <= 0.02 {print $0}' $file | wc -l ) "passing IDR threshold of 0.02"
+done
+
+echo "These  numbers should be in a similar range. If any of these is substantially different from the others, it points that replicate being different in some way.\n\n"
+
+echo "Number of peaks in the Pooled-pseudo replicates"
+echo $outdir"/consistency/selfPseudoReps/pool.pr1_VS_pool.pr2-overlapped-peaks.txt has" $( awk '$11 <= 0.0025 {print $0}' $file | wc -l ) "passing IDR threshold of 0.0025"
+
+echo "the highest number of peaks in the orginal replicates ("$max_numPeaks_Rep")  should be similar to the above number of pooled-pseudoreplicates (within a factor of 2)." 
+
+echo "We typically flag datasets that fail both the above mentioned criteria. We also flag datasets that fail either one of these criteria by a significant margin (i.e the above ratios are significantly >> 2)."
+
+
+for i in $outdir/peaks/reps/*".regionPeak"
+do
+    cat $i | sort -k7nr,7nr | head -n $max_numPeaks_Rep > `echo $i | sed s/.tagAlign_VS_control.tagAlign.regionPeak/_conservative.bed/`
+done
+
+
+
+
+
