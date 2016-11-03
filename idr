@@ -13,7 +13,7 @@ usage() {
 	echo Author: BRIC, University of Copenhagen, Denmark
 	echo Version: 1.0
 	echo Contact: pundhir@binf.ku.dk
-    echo "Usage: idr -i <file> -c <file> -o <dir> [OPTIONS]"
+    echo "Usage: idr -i <files> -c <file> -o <dir> [OPTIONS]"
 	echo "Options:"
     echo " -i <file>   [mapped tag (sample) files in BAM format (separated by comma)]"
     echo "             [format: <identical file name>_Rep[1|2].bam]"
@@ -21,6 +21,7 @@ usage() {
     echo "             [format: <identical file name>_Rep[1|2].bam]"
     echo "             [both control and real samples should be in same directory]"
     echo " -o <dir>    [output directory (should be ABSOLUTE path)]"
+    echo "[OPTIONS]"
     echo " -p <dir>    [path to dependent R scripts (default: /home/pundhir/software/idrCode)]"
     echo " -t <float>  [IDR threshold (default: 0.01)]"
     echo " -g <string> [effective genome size, required by macs2 (default: mm)]"
@@ -63,15 +64,15 @@ fi
 echo
 echo -n "Create appropriate directory structure.. "
 if [ ! -d "$OUTDIR/homer" ]; then
-    mkdir $OUTDIR/homer
-    mkdir $OUTDIR/tagAlign
-    mkdir $OUTDIR/macs
-    mkdir $OUTDIR/quality
-    mkdir $OUTDIR/logs
-    mkdir $OUTDIR/consistency
-    mkdir $OUTDIR/consistency/reps
-    mkdir $OUTDIR/consistency/selfPseudoReps
-    mkdir $OUTDIR/consistency/pooledPseudoReps
+    mkdir -p $OUTDIR/homer
+    mkdir -p $OUTDIR/tagAlign
+    mkdir -p $OUTDIR/macs
+    mkdir -p $OUTDIR/quality
+    mkdir -p $OUTDIR/logs
+    mkdir -p $OUTDIR/consistency
+    mkdir -p $OUTDIR/consistency/reps
+    mkdir -p $OUTDIR/consistency/selfPseudoReps
+    mkdir -p $OUTDIR/consistency/pooledPseudoReps
 fi
 echo "done"
 
@@ -142,8 +143,8 @@ echo "done"
 echo -n "Call peaks on each ChIP sample.. "
 for (( i=1; i<=$CHIP_COUNT; i++ )); do
     #SHIFT_SIZE=$(echo "scale=0; ${FRAGMENT_LENGTH[$i]}/2" | bc)
-    SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$i]/2 ))`
-    macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep"$i.tagAlign.gz -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0.log"
+    SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$i] ))`
+    macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep"$i.tagAlign.gz -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep"$i"_Vs_"$CONTROL_ID"Rep0.log"
 done
 echo "done"
 
@@ -176,8 +177,8 @@ echo "done"
 
 ## peak calling on pooled ChIP sample using macs
 echo -n "Call peaks on pooled ChIP sample.. "
-SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH/2 ))`
-macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep0.tagAlign.gz" -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0.tagAlign.gz" -f BED -n $OUTDIR/macs/$CHIP_ID"Rep0_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep0_Vs_"$CONTROL_ID"Rep0.log"
+SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH ))`
+macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep0.tagAlign.gz" -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0.tagAlign.gz" -f BED -n $OUTDIR/macs/$CHIP_ID"Rep0_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep0_Vs_"$CONTROL_ID"Rep0.log"
 echo "done"
 
 ## retrieve top 100,000 peaks sorted by p-value
@@ -193,8 +194,8 @@ echo "done"
 
 ## peak calling on pooled ChIP sample using macs (control)
 echo -n "Call peaks on pooled ChIP sample (control).. "
-SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH/2 ))`
-macs2 callpeak -t $OUTDIR/tagAlign/$CONTROL_ID"Rep0.tagAlign.gz" -c $OUTDIR/tagAlign/$CHIP_ID"Rep0.tagAlign.gz" -f BED -n $OUTDIR/macs/$CONTROL_ID"Rep0_Vs_"$CHIP_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CONTROL_ID"Rep0_Vs_"$CHIP_ID"Rep0.log"
+SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH ))`
+macs2 callpeak -t $OUTDIR/tagAlign/$CONTROL_ID"Rep0.tagAlign.gz" -c $OUTDIR/tagAlign/$CHIP_ID"Rep0.tagAlign.gz" -f BED -n $OUTDIR/macs/$CONTROL_ID"Rep0_Vs_"$CHIP_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CONTROL_ID"Rep0_Vs_"$CHIP_ID"Rep0.log"
 echo "done"
 
 ##########################################################################
@@ -234,11 +235,11 @@ echo -n "Call peaks on each of the randomly split ChIP samples.. "
 j=0
 for (( i=1; i<=$CHIP_COUNT; i++ )); do
     j=$(( j + 1 ))
-    SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j]/2 ))`
-    macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep"$i.pr1.tagAlign.gz -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep"$i".pr1_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep"$i".pr1_Vs_"$CONTROL_ID"Rep0.log"
+    SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j] ))`
+    macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep"$i.pr1.tagAlign.gz -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep"$i".pr1_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep"$i".pr1_Vs_"$CONTROL_ID"Rep0.log"
     j=$(( j + 1 ))
-    SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j]/2 ))`
-    macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep"$i.pr2.tagAlign.gz -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep"$i".pr2_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep"$i".pr2_Vs_"$CONTROL_ID"Rep0.log" 
+    SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j] ))`
+    macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep"$i.pr2.tagAlign.gz -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep"$i".pr2_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep"$i".pr2_Vs_"$CONTROL_ID"Rep0.log" 
 done
 echo "done"
 
@@ -282,11 +283,11 @@ echo "done"
 echo -n "Call peaks on randomly split pooled ChIP samples.. "
 j=0
 j=$(( j + 1 ))
-SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j]/2 ))`
-macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep0.pr1.tagAlign.gz" -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep0.pr1_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep0.pr1_Vs_"$CONTROL_ID"Rep0.log" 
+SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j] ))`
+macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep0.pr1.tagAlign.gz" -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep0.pr1_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep0.pr1_Vs_"$CONTROL_ID"Rep0.log" 
 j=$(( j + 1 ))
-SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j]/2 ))`
-macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep0.pr2.tagAlign.gz" -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep0.pr2_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --shiftsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep0.pr2_Vs_"$CONTROL_ID"Rep0.log"
+SHIFT_SIZE=`echo $(( FRAGMENT_LENGTH[$j] ))`
+macs2 callpeak -t $OUTDIR/tagAlign/$CHIP_ID"Rep0.pr2.tagAlign.gz" -c $OUTDIR/tagAlign/$CONTROL_ID"Rep0".tagAlign.gz -f BED -n $OUTDIR/macs/$CHIP_ID"Rep0.pr2_Vs_"$CONTROL_ID"Rep0" -g $GENOME -p $MACS_P_VALUE --nomodel --extsize $SHIFT_SIZE 2>$OUTDIR/logs/$CHIP_ID"Rep0.pr2_Vs_"$CONTROL_ID"Rep0.log"
 echo "done"
 
 ## retrieve top 100,000 peaks sorted by p-value
