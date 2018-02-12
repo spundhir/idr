@@ -420,6 +420,7 @@ fi
 echo -n "Compute enrichment and quality measure for input ChIP-seq data... "
 if [ -e "$PROGDIR/phantompeakqualtools/run_spp.R" ]; then
     for (( i=1; i<=$CHIP_COUNT; i++ )); do
+        ## details about the output file are here: https://github.com/kundajelab/phantompeakqualtools#typical-usage
         Rscript $PROGDIR/phantompeakqualtools/run_spp.R -c=$OUTDIR/tagAlign/$CHIP_ID"Rep"$i.tagAlign.gz -fdr=$IDR_THRESHOLD -savp -odir=$OUTDIR/quality -out=$OUTDIR/quality/quality.txt &> $OUTDIR/logs/quality.log
     done
 fi
