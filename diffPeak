@@ -1,3 +1,4 @@
+#!/bin/bash
 #PBS -l nodes=1:ppn=4
 
 ## initialize variables with default values
@@ -35,7 +36,7 @@ while getopts i:j:c:o:p:h ARG; do
 done
 
 ## usage, if necessary file and directories and not given/exist
-if [ ! "$CHIP_INPUT_COND1" -o !"$CHIP_INPUT_COND2" -o ! "$CONTROL_INPUT" -o ! "$OUTDIR" -o "$HELP" ]; then
+if [ -z "$CHIP_INPUT_COND1" -o -z "$CHIP_INPUT_COND2" -o -z "$CONTROL_INPUT" -o -z "$OUTDIR" -o "$HELP" ]; then
     usage
 fi
 
@@ -65,6 +66,7 @@ echo "Total control samples: $CONTROL_COUNT ($CONTROL_ID)"
 ##########################################################################
 ############ DETERMINE SHIFTSIZE FOR EACH CHIP SAMPLE
 ##########################################################################
+
 
 ## determine fragment length for all ChIP samples using macs2
 echo -n "Determine fragment length of each ChIP sample.. "
