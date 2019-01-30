@@ -20,7 +20,7 @@ usage() {
     echo " -c <file>   [mapped tag (control) files in BAM format (separated by comma)]"
     echo "             [format: <identical file name>_Rep[1|2].bam]"
     echo "             [both control and real samples should be in same directory]"
-    echo " -o <dir>    [output directory (should be ABSOLUTE path)]"
+    echo " -o <dir>    [output directory (****should be ABSOLUTE path****)]"
     echo "[OPTIONS]"
     echo " -p <dir>    [path to dependent R scripts (default: /home/pundhir/software/idrCode)]"
     echo " -t <float>  [IDR threshold (default: 0.01)]"
