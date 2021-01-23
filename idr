@@ -4,7 +4,7 @@
 ## initialize variables with default values
 MACS_P_VALUE="1e-3"
 IDR_THRESHOLD="0.01"
-PROGDIR="/home/pundhir/software/idrCode"
+PROGDIR="/localhome/bric/xfd783/software/idrCode/"
 GENOME="mm"
 
 #### usage ####
@@ -22,7 +22,7 @@ usage() {
     echo "             [both control and real samples should be in same directory]"
     echo " -o <dir>    [output directory (****should be ABSOLUTE path****)]"
     echo "[OPTIONS]"
-    echo " -p <dir>    [path to dependent R scripts (default: /home/pundhir/software/idrCode)]"
+    echo " -p <dir>    [path to dependent R scripts (default: ~/software/idrCode)]"
     echo " -t <float>  [IDR threshold (default: 0.01)]"
     echo " -g <string> [effective genome size, required by macs2 (default: mm)]"
     echo "             [availble: hs|mm|ce|dm]"
