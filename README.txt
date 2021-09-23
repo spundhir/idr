@@ -1,3 +1,24 @@
+This program is adapted from IDR code for consistency analysis of peak calling on replicates from Qunhua Li and Anshul Kundaje
+
+Program: idr (run IDR analysis for ChIP-seq data)
+Author: BRIC, University of Copenhagen, Denmark
+Version: 1.0
+Contact: pundhir@binf.ku.dk
+Usage: idr -i <files> -c <file> -o <dir> [OPTIONS]
+Options:
+        -i <file>   [mapped tag (sample) files in BAM format (separated by comma)]
+                    [format: <identical file name>_Rep[1|2].bam]
+        -c <file>   [mapped tag (control) files in BAM format (separated by comma)]
+                    [format: <identical file name>_Rep[1|2].bam]
+                    [both control and real samples should be in same directory]
+        -o <dir>    [output directory (****should be ABSOLUTE path****)]
+    [OPTIONS]
+        -p <dir>    [path to dependent R scripts (default: ~/software/idrCode)]
+        -t <float>  [IDR threshold (default: 0.01)]
+        -g <string> [effective genome size, required by macs2 (default: mm)]
+                    [availble: hs|mm|ce|dm]
+        -h          [help]
+
 ===========================
 README for consistency analysis of peak calling on replicates
 Qunhua Li and Anshul Kundaje (Oct,2010)
