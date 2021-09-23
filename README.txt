@@ -1,4 +1,6 @@
+===========================
 This program is adapted from IDR code for consistency analysis of peak calling on replicates from Qunhua Li and Anshul Kundaje
+===========================
 
 Program: idr (run IDR analysis for ChIP-seq data)
 Author: BRIC, University of Copenhagen, Denmark
